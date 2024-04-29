@@ -1,1 +1,1 @@
-# SU_A3
+SU Assignment 3 by M22AIE227 (Dinesh Kumar)
