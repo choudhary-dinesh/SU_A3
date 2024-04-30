@@ -223,8 +223,8 @@ for epoch in range(num_epochs):
 """##### fintuning DF model on FOR dataset"""
 
 # Training and validation of DF model for fintuning
-num_epochs = 5
-batch_size = 32
+num_epochs = 16
+batch_size = 10
 model_save_path = '/content/DF_finetuned/'
 !mkdir '/content/DF_finetuned/'
 
