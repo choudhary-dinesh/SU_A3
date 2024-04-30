@@ -67,6 +67,7 @@ df = pd.DataFrame(glob.glob("/content/for-2seconds/*/*/*.wav"), columns = ['file
 df['real_or_fake'] = df['file_path'].apply(lambda x : x.split('/')[-2])
 df['split_type'] = df['file_path'].apply(lambda x : x.split('/')[-3])
 df['label'] = df['real_or_fake'].apply(lambda x : 1 if x=='real' else 0)
+df = df.sample(frac=1).reset_index(drop=True)
 
 df.head()
 
@@ -103,13 +104,13 @@ train_set = Dataset_FOR(df[df.split_type == 'training']['file_path'].tolist()[:2
                         df[df.split_type == 'training']['label'].tolist()[:2500])
 train_set[0][0].shape
 
-test_set = Dataset_FOR(df[df.split_type == 'testing']['file_path'].tolist()[:500],
-                        df[df.split_type == 'testing']['label'].tolist()[:500])
-test_set[0][0].shape
-
 validation_set = Dataset_FOR(df[df.split_type == 'validation']['file_path'].tolist()[:500],
                         df[df.split_type == 'validation']['label'].tolist()[:500])
 validation_set[0][0].shape
+
+test_set = Dataset_FOR(df[df.split_type == 'testing']['file_path'].tolist(),
+                        df[df.split_type == 'testing']['label'].tolist())
+test_set[0][0].shape
 
 """#### Model"""
 
@@ -117,12 +118,12 @@ validation_set[0][0].shape
 #downloaded Pre trainned model XLSR and saved at  my drive location /content/drive/MyDrive/Best_LA_model_for_DF.pth
 # above model path need to updated in line 24 in model.py file ie :::  cp_path = '/content/drive/MyDrive/Classroom/xlsr2_300m.pt'
 
-# !wget https://dl.fbaipublicfiles.com/fairseq/wav2vec/xlsr2_300m.pt
-
 # Commented out IPython magic to ensure Python compatibility.
 # %cd /content/SSL_Anti-spoofing
 
-# updated in line 24 in model.py file ie :::  cp_path = '/content/drive/MyDrive/Classroom/xlsr2_300m.pt'
+!wget https://dl.fbaipublicfiles.com/fairseq/wav2vec/xlsr2_300m.pt
+
+# updated in line 24 in model.py file ie :::  cp_path = /content/SSL_Anti-spoofing/xlsr2_300m.pt
 from model import Model
 
 #define pretrianed model path for LA & DF & output file path for both
@@ -211,36 +212,37 @@ optimizer = torch.optim.Adam(model.parameters(), lr=args['lr'],weight_decay=args
 train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=False, drop_last=False)
 dev_loader = DataLoader(validation_set, batch_size=batch_size, shuffle=False, drop_last=False)
 
-best_val_loss = float('inf')
-for epoch in range(num_epochs):
-  running_loss = train_epoch(train_loader,model, args['lr'],optimizer, device)
-  val_loss = evaluate_accuracy(dev_loader, model, device)
-  print("epochs :::: ", epoch,'\t',  'train_loss :: ', running_loss, '\t', 'val_loss :: ', val_loss,)
-  if val_loss < best_val_loss:
-    best_val_loss = val_loss
-    torch.save(model.state_dict(), os.path.join(model_save_path, 'best_finetuned_LA_model.pth'))
-
-"""##### fintuning DF model on FOR dataset"""
-
-# Training and validation of DF model for fintuning
-num_epochs = 16
-batch_size = 10
-model_save_path = '/content/DF_finetuned/'
-!mkdir '/content/DF_finetuned/'
-
-model = get_model(args, device, 'df')
-
-train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=False, drop_last=False)
-dev_loader = DataLoader(validation_set, batch_size=batch_size, shuffle=False, drop_last=False)
-
-best_val_loss = float('inf')
 for epoch in range(num_epochs):
   running_loss = train_epoch(train_loader,model, args['lr'],optimizer, device)
   val_loss = evaluate_accuracy(dev_loader, model, device)
   print("epochs :::: ", epoch, '\t', 'train_loss :: ', running_loss, '\t',  'val_loss :: ', val_loss,)
-  if val_loss < best_val_loss:
-    best_val_loss = val_loss
-    torch.save(model.state_dict(), os.path.join(model_save_path, 'best_finetuned_DF_model.pth'))
+  torch.save(model.state_dict(), os.path.join(model_save_path, f"finetuned_LA_model_epochs_{epoch}.pth"))
+
+#saving model in drive for further uses
+torch.save(model.state_dict(), '/content/drive/MyDrive/best_finetuned_LA_model.pth')
+
+"""##### fintuning DF model on FOR dataset"""
+
+# Training and validation of DF model for fintuning
+num_epochs = 10
+batch_size = 16
+model_save_path = '/content/DF_finetuned/'
+!mkdir '/content/DF_finetuned/'
+
+model = get_model(args, device, 'df')
+optimizer = torch.optim.Adam(model.parameters(), lr=args['lr'],weight_decay=args['weight_decay'])
+
+train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=False, drop_last=False)
+dev_loader = DataLoader(validation_set, batch_size=batch_size, shuffle=False, drop_last=False)
+
+for epoch in range(num_epochs):
+  running_loss = train_epoch(train_loader,model, args['lr'],optimizer, device)
+  val_loss = evaluate_accuracy(dev_loader, model, device)
+  print("epochs :::: ", epoch, '\t', 'train_loss :: ', running_loss, '\t',  'val_loss :: ', val_loss,)
+  torch.save(model.state_dict(), os.path.join(model_save_path, f"finetuned_DF_model_epochs_{epoch}.pth"))
+
+#saving model in drive for further uses
+torch.save(model.state_dict(), '/content/drive/MyDrive/best_finetuned_DF_model.pth')
 
 """#### Inference (For both LA & DF)"""
 
@@ -264,25 +266,25 @@ def produce_evaluation_file(dataset,batch_size, model, device, save_path):
     fh.close()
   print('Scores are saved to {}'.format(save_path))
 
-####updating args model path with best fine tuned model path for both LA & DF
+#updating args model path with best fine tuned model path for both LA & DF
 args = {
-        'la_model_path' : '/content/LA_finetuned/best_finetuned_LA_model.pth',
-        'df_model_path' : '/content/DF_finetuned/best_finetuned_DF_model.pth' ,
+        'la_model_path' : '/content/drive/MyDrive/best_finetuned_LA_model.pth',
+        'df_model_path' : '/content/drive/MyDrive/best_finetuned_DF_model.pth' ,
         'lr' :     0.000001,
         'weight_decay' : 0.0001,
         'la_eval_output' : '/content/finetuned_la_score.txt',
         'df_eval_output' : '/content/finetuned_df_score.txt',
         }
 
-batch_size = 2
+batch_size = 16
 ##inference using LA model, & saving scores in txt files
 model = get_model(args, device, la_or_df='la')
-produce_evaluation_file(eval_set,batch_size, model, device, args['la_eval_output'])
+produce_evaluation_file(test_set,batch_size, model, device, args['la_eval_output'])
 
-batch_size = 2
+batch_size = 16
 ##inference using DF model, & saving scores in txt files
 model = get_model(args, device, la_or_df='df')
-produce_evaluation_file(eval_set,batch_size, model, device, args['df_eval_output'])
+produce_evaluation_file(test_set,batch_size, model, device, args['df_eval_output'])
 
 """#### Evaluation Metrics (EER & AUC)
 
@@ -329,3 +331,4 @@ print("EER (Equal Error Rate) for fintuned DF model : ", round(df_eer, 4))
 
 #plotting roc cureve with auc for LA model
 plot_roc_curve_with_auc(df_df.truth, df_df.scores, 'df')
+
