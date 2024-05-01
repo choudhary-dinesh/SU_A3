@@ -14,7 +14,7 @@ drive.mount('/content/drive')
 
 !git clone https://github.com/TakHemlata/SSL_Anti-spoofing.git
 
-"""#### Install requirements"""
+"""#### Install requirements """
 
 # !pip install torch==1.8.1+cu111 -f https://download.pytorch.org/whl/torch_stable.html   --not feasible hence installing nearesr version 1.11
 !pip install torch==1.11.0
